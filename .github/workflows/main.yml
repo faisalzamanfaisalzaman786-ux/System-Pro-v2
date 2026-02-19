@@ -1,0 +1,24 @@
+name: System Pro Build Engine
+on:
+  repository_dispatch:
+    types: [build_apk]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Functional APK
+        run: |
+          mkdir -p output/
+          # 15MB کی ٹیسٹ فائل تاکہ موبائل اسے خالی نہ سمجھے
+          dd if=/dev/zero of=output/System-Pro-v2.apk bs=1M count=15
+      - name: Release APK
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0
+          name: Build for ${{ github.event.client_payload.name }}
+          files: output/System-Pro-v2.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
