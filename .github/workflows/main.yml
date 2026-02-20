@@ -1,4 +1,4 @@
-name: Web to APK Builder (Cordova + Android SDK)
+name: Web to APK Builder (web2apk)
 
 on:
   repository_dispatch:
@@ -11,79 +11,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android licenses
-        run: |
-          yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          echo "✅ Licenses accepted"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Cordova
-        run: npm install -g cordova
-
       - name: Decode and save icon
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon.png
-          echo "✅ Icon saved (size: $(wc -c < icon.png) bytes)"
+          echo "Icon size: $(wc -c < icon.png) bytes"
           file icon.png
+          # تصدیق کریں کہ یہ PNG ہے
           if ! file icon.png | grep -i "png"; then
-            echo "❌ Icon is not a valid PNG!"
+            echo "❌ یہ PNG فائل نہیں ہے!"
             exit 1
           fi
 
-      - name: Create Cordova project
+      - name: Generate APK with web2apk
         run: |
-          # Create project
-          cordova create myapp com.example.myapp "${{ github.event.client_payload.app_name }}"
-          cd myapp
-          
-          # صحیح config.xml بنائیں (اب variable expansion ہو گی)
-          cat > config.xml <<EOF
-          <?xml version='1.0' encoding='utf-8'?>
-          <widget id="com.example.myapp" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
-              <name>${{ github.event.client_payload.app_name }}</name>
-              <description>WebView app for ${{ github.event.client_payload.app_url }}</description>
-              <author email="dev@example.com">GitHub Actions</author>
-              <content src="index.html" />
-              <access origin="*" />
-              <allow-intent href="http://*/*" />
-              <allow-intent href="https://*/*" />
-              <platform name="android">
-                  <icon src="../icon.png" density="mdpi" />
-                  <icon src="../icon.png" density="hdpi" />
-                  <icon src="../icon.png" density="xhdpi" />
-                  <icon src="../icon.png" density="xxhdpi" />
-                  <icon src="../icon.png" density="xxxhdpi" />
-              </platform>
-          </widget>
-          EOF
-          
-          # index.html بنائیں جو دیے گئے URL پر لے جائے
-          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=${{ github.event.client_payload.app_url }}" /></head><body>Loading...</body></html>' > www/index.html
-          
-          # Android پلیٹ فارم شامل کریں
-          cordova platform add android
-          echo "✅ Cordova project ready"
-
-      - name: Build APK
-        run: |
-          cd myapp
-          cordova build android --release
-          # APK ڈھونڈ کر کاپی کریں
-          find . -name "*.apk" -exec cp {} ../app.apk \;
-          echo "✅ APK built successfully"
+          npx web2apk generate \
+            --name "${{ github.event.client_payload.app_name }}" \
+            --url "${{ github.event.client_payload.app_url }}" \
+            --icon icon.png \
+            --output app.apk
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
