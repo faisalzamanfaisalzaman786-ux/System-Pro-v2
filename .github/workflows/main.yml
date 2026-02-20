@@ -16,29 +16,47 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install web2apk (simple WebView APK generator)
-        run: npm install -g web2apk
-
       - name: Decode and save icon
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon.png
+          echo "✅ Icon saved (size: $(wc -c < icon.png) bytes)"
 
-      - name: Generate APK using web2apk
+      - name: Verify icon file
         run: |
-          web2apk generate \
+          if [ ! -s icon.png ]; then
+            echo "❌ Icon file is empty!"
+            exit 1
+          fi
+          file icon.png
+
+      - name: Generate APK using npx web2apk
+        run: |
+          npx web2apk generate \
             --name "${{ github.event.client_payload.app_name }}" \
             --url "${{ github.event.client_payload.app_url }}" \
             --icon icon.png \
             --output app.apk
+          echo "✅ APK generated: app.apk"
+
+      - name: Upload APK as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app.apk
+          path: app.apk
+          if-no-files-found: error
 
       - name: Create Release and Upload APK
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
           name: "APK Build #${{ github.run_id }}"
-          body: "✅ APK for ${{ github.event.client_payload.app_name }}"
+          body: |
+            **App:** ${{ github.event.client_payload.app_name }}
+            **URL:** ${{ github.event.client_payload.app_url }}
+            **Built:** $(date -u)
           files: app.apk
           draft: false
           prerelease: false
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
