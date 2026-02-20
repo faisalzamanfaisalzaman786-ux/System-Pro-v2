@@ -2,24 +2,30 @@ name: System Pro Build Engine
 on:
   repository_dispatch:
     types: [build_apk]
+
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Create Functional APK
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate File
         run: |
           mkdir -p output/
-          # یہاں آپ کا اصل بلڈ کمانڈ آئے گا
-          echo "Building APK for ${{ github.event.client_payload.name }} with URL ${{ github.event.client_payload.url }}" > output/log.txt
-          touch output/System-Pro-v2.apk
-      - name: Release APK
+          echo "App Name: ${{ github.event.client_payload.name }}" > output/info.txt
+          # ٹیسٹ کے لیے ایک ڈمی فائل بنانا
+          head -c 1M </dev/urandom > output/System-Pro-v2.apk
+
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: output/System-Pro-v2.apk
           tag_name: v1.0
           name: Release v1.0
+          files: output/System-Pro-v2.apk
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
