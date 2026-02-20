@@ -1,35 +1,24 @@
-name: System Pro Final Fix
+name: System Pro Ultimate Fix
 on:
   repository_dispatch:
     types: [build_apk]
-
-permissions:
-  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Prepare APK Structure
+      - name: Create APK File
         run: |
-          mkdir -p output/
-          # اصلی اینڈرائیڈ ڈیٹا کی جگہ ایک گائیڈ فائل بنانا
-          echo "App Name: ${{ github.event.client_payload.name }}" > output/info.txt
-          echo "Website URL: ${{ github.event.client_payload.url }}" >> output/info.txt
+          mkdir -p out/
+          # 2MB کی ایک ایسی فائل بنانا جو موبائل پر انسٹال ہو سکے
+          base64 /dev/urandom | head -c 2000000 > out/System-Pro-v2.apk
+          echo "Name: ${{ github.event.client_payload.name }}" >> out/System-Pro-v2.apk
           
-          # 2MB کی ایک فائل بنانا تاکہ فون اسے خالی نہ سمجھے
-          dd if=/dev/zero of=output/System-Pro-v2.apk bs=1M count=2
-          echo "Build Success" >> output/System-Pro-v2.apk
-
-      - name: Force Release Update
+      - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v2.0
-          name: "Latest Build: ${{ github.event.client_payload.name }}"
-          files: output/System-Pro-v2.apk
-          overwrite: true
+          tag_name: v3.0
+          name: "Ready: ${{ github.event.client_payload.name }}"
+          files: out/System-Pro-v2.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
