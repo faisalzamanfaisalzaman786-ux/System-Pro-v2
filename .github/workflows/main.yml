@@ -1,4 +1,4 @@
-name: Web to APK Builder (Simple & Reliable)
+name: Web to APK Builder (Bubblewrap)
 
 on:
   repository_dispatch:
@@ -11,13 +11,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android Licenses (explicit fallback)
+        run: |
+          yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          echo "✅ Licenses accepted"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install web2apk
-        run: npm install -g web2apk
+      - name: Cache npm
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
 
       - name: Decode and save icon
         run: |
@@ -25,13 +45,24 @@ jobs:
           echo "✅ Icon saved (size: $(wc -c < icon.png) bytes)"
           file icon.png
 
-      - name: Generate APK with web2apk
+      - name: Create Web App Manifest
         run: |
-          web2apk generate \
-            --name "${{ github.event.client_payload.app_name }}" \
-            --url "${{ github.event.client_payload.app_url }}" \
-            --icon icon.png \
-            --output app.apk
+          cat > manifest.json <<EOF
+          {
+            "name": "${{ github.event.client_payload.app_name }}",
+            "short_name": "${{ github.event.client_payload.app_name }}",
+            "start_url": "${{ github.event.client_payload.app_url }}",
+            "display": "standalone",
+            "icons": [{ "src": "icon.png", "sizes": "192x192", "type": "image/png" }]
+          }
+          EOF
+
+      - name: Build APK with Bubblewrap
+        run: |
+          npx @bubblewrap/cli init --manifest manifest.json --directory app
+          cd app
+          npx @bubblewrap/cli build
+          cp app-release-signed.apk ../app.apk
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
