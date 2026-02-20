@@ -1,4 +1,4 @@
-name: Web to APK Builder (PWABuilder)
+name: Web to APK Builder (web2apk)
 
 on:
   repository_dispatch:
@@ -16,39 +16,24 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install PWABuilder CLI
-        run: npm install -g @pwabuilder/cli
-
       - name: Decode and save icon
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon.png
           echo "✅ Icon saved (size: $(wc -c < icon.png) bytes)"
           file icon.png
-
-      - name: Generate APK with PWABuilder (corrected)
-        run: |
-          URL="${{ github.event.client_payload.app_url }}"
-          NAME="${{ github.event.client_payload.app_name }}"
-          echo "Building APK for $URL with name $NAME"
-          # Create output directory
-          mkdir -p ./pwa-output
-          # Run PWABuilder generate
-          npx @pwabuilder/cli generate "$URL" \
-            --name "$NAME" \
-            --icon ./icon.png \
-            --output ./pwa-output \
-            --backgroundColor "#ffffff" \
-            --themeColor "#000000"
-          echo "✅ Generation completed. Listing output:"
-          ls -la ./pwa-output
-          # Find the APK file (usually in ./pwa-output/android/app-release.apk or similar)
-          APK_PATH=$(find ./pwa-output -name "*.apk" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "❌ No APK found in output!"
+          # Verify it's a valid PNG
+          if ! file icon.png | grep -i "png"; then
+            echo "❌ Decoded file is not a valid PNG"
             exit 1
           fi
-          echo "Found APK at $APK_PATH"
-          cp "$APK_PATH" ./app.apk
+
+      - name: Generate APK with web2apk
+        run: |
+          npx web2apk generate \
+            --name "${{ github.event.client_payload.app_name }}" \
+            --url "${{ github.event.client_payload.app_url }}" \
+            --icon icon.png \
+            --output app.apk
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
