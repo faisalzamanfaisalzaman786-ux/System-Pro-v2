@@ -1,34 +1,57 @@
-name: System Pro Permanent Fix v9
+name: Web to APK Builder
+
 on:
   repository_dispatch:
-    types: [build_apk]
-
-permissions:
-  contents: write
+    types: [build-apk]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-      - name: Prepare Installable File
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install web2apk (or bubblewrap)
+        run: npm install -g @bubblewrap/cli  # or use a simpler tool like 'web2apk'
+
+      - name: Decode icon and save
         run: |
-          mkdir -p output/
-          # اینڈرائیڈ پیکج کے لیے مخصوص 'Magic Bytes' جو فون کو دھوکا نہیں دیں گے
-          echo "PK" > output/System-Pro-v9.apk
-          # فائل کا سائز 5MB سے اوپر رکھنا ضروری ہے تاکہ پارسنگ ایرر نہ آئے
-          dd if=/dev/urandom bs=1M count=5 >> output/System-Pro-v9.apk
-          # ایپ کی معلومات کو فائل کے آخر میں جوڑنا
-          echo "Config: ${{ github.event.client_payload.name }} | ${{ github.event.client_payload.url }}" >> output/System-Pro-v9.apk
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app-icon.png
 
-      - name: Create Permanent Release v9.0
+      - name: Generate APK with Bubblewrap (TWA)
+        run: |
+          # Bubblewrap requires a manifest. We'll create a simple one
+          echo '{
+            "name": "${{ github.event.client_payload.app_name }}",
+            "short_name": "${{ github.event.client_payload.app_name }}",
+            "start_url": "${{ github.event.client_payload.app_url }}",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#000000",
+            "icons": [{ "src": "app-icon.png", "sizes": "512x512", "type": "image/png" }]
+          }' > manifest.json
+
+          npx @bubblewrap/cli init --manifest manifest.json --directory app
+          cd app
+          npx @bubblewrap/cli build
+          cp app-release-signed.apk ../app.apk
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release.apk
+          path: app.apk
+
+      - name: Create Release (optional)
+        if: success()
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v9.0
-          name: "System Pro Stable Build v9.0"
-          files: output/System-Pro-v9.apk
-          overwrite: true
+          tag_name: build-${{ github.run_id }}
+          files: app.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
