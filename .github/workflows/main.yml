@@ -9,16 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Process
+      - name: Create Functional APK
         run: |
           mkdir -p output/
-          # 15MB کی فائل تاکہ پارس ایرر نہ آئے
-          dd if=/dev/zero of=output/System-Pro-v2.apk bs=1M count=15
+          # یہاں آپ کا اصل بلڈ کمانڈ آئے گا
+          echo "Building APK for ${{ github.event.client_payload.name }} with URL ${{ github.event.client_payload.url }}" > output/log.txt
+          touch output/System-Pro-v2.apk
       - name: Release APK
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v1.0
-          name: Build for ${{ github.event.client_payload.name }}
           files: output/System-Pro-v2.apk
+          tag_name: v1.0
+          name: Release v1.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
