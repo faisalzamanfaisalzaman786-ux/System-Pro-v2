@@ -1,4 +1,4 @@
-name: Web to APK Builder (web2apk)
+name: Web to APK Builder (Cordova)
 
 on:
   repository_dispatch:
@@ -11,10 +11,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Install Cordova and dependencies
+        run: |
+          npm install -g cordova
+          npm install -g sharp  # for icon conversion if needed (but we already have PNG)
 
       - name: Decode and save icon
         run: |
@@ -23,17 +34,26 @@ jobs:
           file icon.png
           # Verify it's a valid PNG
           if ! file icon.png | grep -i "png"; then
-            echo "❌ Decoded file is not a valid PNG"
+            echo "❌ Icon is not a valid PNG!"
             exit 1
           fi
 
-      - name: Generate APK with web2apk
+      - name: Create Cordova project
         run: |
-          npx web2apk generate \
-            --name "${{ github.event.client_payload.app_name }}" \
-            --url "${{ github.event.client_payload.app_url }}" \
-            --icon icon.png \
-            --output app.apk
+          cordova create myapp com.example.myapp "${{ github.event.client_payload.app_name }}"
+          cd myapp
+          cordova platform add android
+          # Replace the default icon
+          cp ../icon.png www/res/icon/android/icon-96-xhdpi.png
+          # Create a simple index.html that redirects to the target URL
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=${{ github.event.client_payload.app_url }}" /></head><body>Loading...</body></html>' > www/index.html
+
+      - name: Build APK
+        run: |
+          cd myapp
+          cordova build android --release
+          # Find the generated APK
+          find . -name "*.apk" -exec cp {} ../app.apk \;
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
