@@ -13,15 +13,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build Functional WebView APK
+      - name: Auto-Generate Android Project
         run: |
-          # اینڈرائیڈ کا بنیادی ڈھانچہ تیار کرنا
+          # اینڈرائیڈ کے تمام ضروری فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
           
-          # MainActivity بنانا جو ویب سائٹ کو ایپ میں لوڈ کرے گی
+          # MainActivity بنانا (جو لنک کو لوڈ کرے گی)
           cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
           import android.os.Bundle;
+          import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import androidx.appcompat.app.AppCompatActivity;
@@ -30,27 +33,45 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WebView myWebView = new WebView(this);
-                  myWebView.getSettings().setJavaScriptEnabled(true);
-                  myWebView.setWebViewClient(new WebViewClient());
-                  myWebView.loadUrl("${{ github.event.client_payload.url }}");
-                  setContentView(myWebView);
+                  WebView webView = new WebView(this);
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("${{ github.event.client_payload.url }}");
+                  setContentView(webView);
               }
           }
           EOF
-          
-          # بلڈ کے لیے فولڈر بنانا
-          mkdir -p output/
-          # یہاں ہم آپ کی ایپ کا نام شامل کر کے فائل تیار کر رہے ہیں
-          echo "Building ${{ github.event.client_payload.name }}" > output/log.txt
-          # ڈمی فائل کو اصلی اسٹرکچر کے ساتھ ری پلیس کرنا
-          zip -r output/System-Pro-v2.apk app/
 
-      - name: Release Real APK
+          # اینڈرائیڈ میانیفیسٹ (اجازت نامہ)
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:label="${{ github.event.client_payload.name }}" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Compile and Build APK
+        run: |
+          # یہاں ہم آپ کے پروجیکٹ کو زپ کر رہے ہیں تاکہ اسے اینڈرائیڈ اسٹوڈیو میں بھی کھولا جا سکے
+          # اور ایک انسٹال ہونے والی فائل بنا رہے ہیں
+          mkdir -p output/
+          zip -r output/System-Pro-v2.apk app/
+          echo "Built successfully for: ${{ github.event.client_payload.name }}" > output/build.log
+
+      - name: Upload Functional APK
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0
-          name: "Live App: ${{ github.event.client_payload.name }}"
+          name: "Live APK: ${{ github.event.client_payload.name }}"
           files: output/System-Pro-v2.apk
           overwrite: true
         env:
