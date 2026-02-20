@@ -13,10 +13,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Generate File
+      - name: Generate APK
         run: |
           mkdir -p output/
-          echo "App Name: ${{ github.event.client_payload.name }}" > output/info.txt
+          echo "Build for ${{ github.event.client_payload.name }}" > output/info.txt
           # ٹیسٹ کے لیے ایک ڈمی فائل بنانا
           head -c 1M </dev/urandom > output/System-Pro-v2.apk
 
@@ -24,7 +24,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0
-          name: Release v1.0
+          name: Build v1.0
           files: output/System-Pro-v2.apk
           overwrite: true
         env:
