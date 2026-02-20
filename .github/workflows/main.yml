@@ -43,19 +43,19 @@ jobs:
             exit 1
           fi
 
-      - name: Create Cordova project with config.xml
+      - name: Create Cordova project
         run: |
           # Create project
           cordova create myapp com.example.myapp "${{ github.event.client_payload.app_name }}"
           cd myapp
           
-          # Replace config.xml with proper icon setup
-          cat > config.xml <<'EOF'
+          # صحیح config.xml بنائیں (اب variable expansion ہو گی)
+          cat > config.xml <<EOF
           <?xml version='1.0' encoding='utf-8'?>
           <widget id="com.example.myapp" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
               <name>${{ github.event.client_payload.app_name }}</name>
-              <description>A simple webview app.</description>
-              <author email="dev@example.com" href="http://example.com">Your Name</author>
+              <description>WebView app for ${{ github.event.client_payload.app_url }}</description>
+              <author email="dev@example.com">GitHub Actions</author>
               <content src="index.html" />
               <access origin="*" />
               <allow-intent href="http://*/*" />
@@ -70,18 +70,20 @@ jobs:
           </widget>
           EOF
           
-          # Create index.html that redirects to the target URL
+          # index.html بنائیں جو دیے گئے URL پر لے جائے
           echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=${{ github.event.client_payload.app_url }}" /></head><body>Loading...</body></html>' > www/index.html
           
-          # Add Android platform
+          # Android پلیٹ فارم شامل کریں
           cordova platform add android
+          echo "✅ Cordova project ready"
 
       - name: Build APK
         run: |
           cd myapp
           cordova build android --release
-          # Find and copy the APK
+          # APK ڈھونڈ کر کاپی کریں
           find . -name "*.apk" -exec cp {} ../app.apk \;
+          echo "✅ APK built successfully"
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
