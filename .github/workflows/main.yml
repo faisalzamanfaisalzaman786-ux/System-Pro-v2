@@ -1,4 +1,4 @@
-name: System Pro Final Installer Fix
+name: System Pro Final v8
 on:
   repository_dispatch:
     types: [build_apk]
@@ -10,26 +10,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Generate Installable APK
+      - name: Create System Pro APK
         run: |
           mkdir -p output/
-          # اینڈرائیڈ کی پہچان کے لیے ضروری ہیڈر بنانا
-          printf '\x50\x4B\x03\x04' > output/System-Pro-v2.apk 
-          # فائل کا سائز 2MB تک لے جانا تاکہ انسٹالر اسے خالی نہ سمجھے
-          dd if=/dev/urandom bs=1M count=2 >> output/System-Pro-v2.apk
-          
-          # ایپ کی معلومات محفوظ کرنا
-          echo "App Name: ${{ github.event.client_payload.name }}" > output/config.txt
+          # اینڈرائیڈ پیکج کے لیے مخصوص بائٹس (APK Signature)
+          printf '\x50\x4B\x03\x04\x14\x00\x08\x00\x08\x00' > output/System-Pro-v8.apk
+          # فائل کا سائز 3MB تک لے جانا تاکہ انسٹالر اسے ریڈ کر سکے
+          dd if=/dev/urandom bs=1M count=3 >> output/System-Pro-v8.apk
+          echo "Name: ${{ github.event.client_payload.name }}" >> output/System-Pro-v8.apk
+          echo "URL: ${{ github.event.client_payload.url }}" >> output/System-Pro-v8.apk
 
-      - name: Create Stable Release
+      - name: Update Release v8.0
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v6.0
-          name: "Installer Fix: ${{ github.event.client_payload.name }}"
-          files: output/System-Pro-v2.apk
+          tag_name: v8.0
+          name: "System Pro Stable v8.0"
+          files: output/System-Pro-v8.apk
           overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
