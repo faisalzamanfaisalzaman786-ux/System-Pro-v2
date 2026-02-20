@@ -1,4 +1,5 @@
-name: System Pro Build Engine
+          mkdir -p output/
+   name: System Pro Build Engine
 on:
   repository_dispatch:
     types: [build_apk]
@@ -36,6 +37,16 @@ jobs:
         run: |
           mkdir -p output/
           cp app/build/outputs/apk/debug/app-debug.apk output/System-Pro-v2.apk
+
+      - name: Release Professional APK
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0
+          name: "${{ github.event.client_payload.name }} (Live)"
+          files: output/System-Pro-v2.apk
+          overwrite: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}       cp app/build/outputs/apk/debug/app-debug.apk output/System-Pro-v2.apk
 
       - name: Release Professional APK
         uses: softprops/action-gh-release@v1
