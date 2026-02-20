@@ -1,4 +1,4 @@
-name: Web to APK Builder (Auto‑Convert)
+name: Web to APK Builder
 
 on:
   repository_dispatch:
@@ -31,13 +31,12 @@ jobs:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install dependencies (sharp for image conversion)
+      - name: Install dependencies
         run: npm install -g @bubblewrap/cli sharp
 
       - name: Decode and convert icon to PNG
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > input_image
-          # Use sharp to convert any image to PNG (resize to 192x192)
           node -e "
           const sharp = require('sharp');
           sharp('input_image')
@@ -47,7 +46,6 @@ jobs:
             .then(() => console.log('✅ Converted to PNG'))
             .catch(err => { console.error(err); process.exit(1); });
           "
-          echo "Final icon size: $(wc -c < icon.png) bytes"
 
       - name: Create Web App Manifest
         run: |
