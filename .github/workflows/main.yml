@@ -1,4 +1,4 @@
-name: Web to APK Builder
+name: Web to APK Builder (Simple & Reliable)
 
 on:
   repository_dispatch:
@@ -11,59 +11,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Cache npm
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      - name: Install web2apk
+        run: npm install -g web2apk
 
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
-      # ✅ FIXED: Simply decode the base64 PNG sent from HTML
       - name: Decode and save icon
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon.png
           echo "✅ Icon saved (size: $(wc -c < icon.png) bytes)"
           file icon.png
-          # Optional: verify it's a PNG
-          if ! file icon.png | grep -i "png"; then
-            echo "❌ Decoded file is not a valid PNG"
-            exit 1
-          fi
 
-      - name: Create Web App Manifest
+      - name: Generate APK with web2apk
         run: |
-          cat > manifest.json <<EOF
-          {
-            "name": "${{ github.event.client_payload.app_name }}",
-            "short_name": "${{ github.event.client_payload.app_name }}",
-            "start_url": "${{ github.event.client_payload.app_url }}",
-            "display": "standalone",
-            "icons": [{ "src": "icon.png", "sizes": "192x192", "type": "image/png" }]
-          }
-          EOF
-
-      - name: Build APK with Bubblewrap
-        run: |
-          npx @bubblewrap/cli init --manifest manifest.json --directory app
-          cd app
-          npx @bubblewrap/cli build
-          cp app-release-signed.apk ../app.apk
+          web2apk generate \
+            --name "${{ github.event.client_payload.app_name }}" \
+            --url "${{ github.event.client_payload.app_url }}" \
+            --icon icon.png \
+            --output app.apk
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
