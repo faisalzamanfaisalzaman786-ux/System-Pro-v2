@@ -1,24 +1,56 @@
-name: System Pro Ultimate Fix
+name: Build APK from Dispatch
+
 on:
   repository_dispatch:
-    types: [build_apk]
+    types: [build-apk]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Create APK File
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Decode and save logo
         run: |
-          mkdir -p out/
-          # 2MB کی ایک ایسی فائل بنانا جو موبائل پر انسٹال ہو سکے
-          base64 /dev/urandom | head -c 2000000 > out/System-Pro-v2.apk
-          echo "Name: ${{ github.event.client_payload.name }}" >> out/System-Pro-v2.apk
+          echo "${{ github.event.client_payload.logoBase64 }}" | base64 --decode > app_icon.png
+
+      # 🔁 Replace this step with your actual Android build commands
+      - name: Create APK (demo placeholder)
+        run: |
+          # Create a simple text file with app info
+          echo "App Name: ${{ github.event.client_payload.appName }}" > app_info.txt
+          echo "App URL: ${{ github.event.client_payload.appUrl }}" >> app_info.txt
+          echo "Build time: $(date)" >> app_info.txt
           
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
+          # For demonstration, create a zip and rename it .apk
+          # In a real project, run ./gradlew assembleRelease or similar
+          mkdir -p dist
+          zip dist/System-Pro-v2.apk app_info.txt app_icon.png
+
+      - name: Upload APK as artifact (optional)
+        uses: actions/upload-artifact@v3
         with:
-          tag_name: v3.0
-          name: "Ready: ${{ github.event.client_payload.name }}"
-          files: out/System-Pro-v2.apk
+          name: built-apk
+          path: dist/System-Pro-v2.apk
+
+      - name: Create or update release
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v3.0
+          release_name: "APK Build ${{ github.event.client_payload.appName }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload APK to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/System-Pro-v2.apk
+          asset_name: System-Pro-v2.apk
+          asset_content_type: application/vnd.android.package-archive
