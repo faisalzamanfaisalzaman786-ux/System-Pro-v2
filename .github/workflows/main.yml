@@ -1,4 +1,4 @@
-name: Web to APK Builder (Cached)
+name: Web to APK Builder (Auto‑Convert)
 
 on:
   repository_dispatch:
@@ -25,24 +25,31 @@ jobs:
         with:
           node-version: 20
 
-      - name: Cache Bubblewrap
+      - name: Cache npm
         uses: actions/cache@v3
         with:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
+      - name: Install dependencies (sharp for image conversion)
+        run: npm install -g @bubblewrap/cli sharp
 
-      - name: Decode icon
+      - name: Decode and convert icon to PNG
         run: |
-          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon.png
-          echo "Icon size: $(wc -c < icon.png) bytes"
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > input_image
+          # Use sharp to convert any image to PNG (resize to 192x192)
+          node -e "
+          const sharp = require('sharp');
+          sharp('input_image')
+            .resize(192, 192, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+            .png()
+            .toFile('icon.png')
+            .then(() => console.log('✅ Converted to PNG'))
+            .catch(err => { console.error(err); process.exit(1); });
+          "
+          echo "Final icon size: $(wc -c < icon.png) bytes"
 
-      - name: Verify PNG
-        run: file icon.png | grep -i "png" || (echo "❌ Not a PNG"; exit 1)
-
-      - name: Create manifest
+      - name: Create Web App Manifest
         run: |
           cat > manifest.json <<EOF
           {
@@ -54,14 +61,14 @@ jobs:
           }
           EOF
 
-      - name: Build APK
+      - name: Build APK with Bubblewrap
         run: |
           npx @bubblewrap/cli init --manifest manifest.json --directory app
           cd app
           npx @bubblewrap/cli build
           cp app-release-signed.apk ../app.apk
 
-      - name: Upload artifact
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: app.apk
@@ -72,19 +79,5 @@ jobs:
         with:
           tag_name: build-${{ github.run_id }}
           files: app.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create Release and Upload APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_id }}
-          name: "APK Build #${{ github.run_id }}"
-          body: |
-            **App:** ${{ github.event.client_payload.app_name }}
-            **URL:** ${{ github.event.client_payload.app_url }}
-            **Built:** $(date -u)
-          files: app.apk
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
