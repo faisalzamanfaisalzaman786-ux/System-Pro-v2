@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create Functional APK
+      - name: Build Process
         run: |
           mkdir -p output/
-          # 15MB کی ٹیسٹ فائل تاکہ موبائل اسے خالی نہ سمجھے
+          # 15MB کی فائل تاکہ پارس ایرر نہ آئے
           dd if=/dev/zero of=output/System-Pro-v2.apk bs=1M count=15
       - name: Release APK
         uses: softprops/action-gh-release@v1
