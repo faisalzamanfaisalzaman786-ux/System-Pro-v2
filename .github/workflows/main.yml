@@ -1,4 +1,4 @@
-name: Web to APK Builder (Bubblewrap)
+name: Web to APK Builder (Cached)
 
 on:
   repository_dispatch:
@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -25,22 +25,24 @@ jobs:
         with:
           node-version: 20
 
+      - name: Cache Bubblewrap
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Decode and save icon
+      - name: Decode icon
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon.png
-          echo "✅ Icon saved (size: $(wc -c < icon.png) bytes)"
+          echo "Icon size: $(wc -c < icon.png) bytes"
 
-      - name: Verify icon (must be PNG)
-        run: |
-          if ! file icon.png | grep -i "png"; then
-            echo "❌ Icon is not a valid PNG! Convert your image to PNG and try again."
-            exit 1
-          fi
+      - name: Verify PNG
+        run: file icon.png | grep -i "png" || (echo "❌ Not a PNG"; exit 1)
 
-      - name: Create Web App Manifest
+      - name: Create manifest
         run: |
           cat > manifest.json <<EOF
           {
@@ -48,36 +50,30 @@ jobs:
             "short_name": "${{ github.event.client_payload.app_name }}",
             "start_url": "${{ github.event.client_payload.app_url }}",
             "display": "standalone",
-            "background_color": "#ffffff",
-            "theme_color": "#000000",
-            "icons": [
-              {
-                "src": "icon.png",
-                "sizes": "512x512",
-                "type": "image/png"
-              }
-            ]
+            "icons": [{ "src": "icon.png", "sizes": "192x192", "type": "image/png" }]
           }
           EOF
-          echo "✅ manifest.json created"
 
-      - name: Initialize Bubblewrap project
+      - name: Build APK
         run: |
           npx @bubblewrap/cli init --manifest manifest.json --directory app
-
-      - name: Build APK with Bubblewrap
-        run: |
           cd app
           npx @bubblewrap/cli build
           cp app-release-signed.apk ../app.apk
 
-      - name: Upload APK as artifact (backup)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: app.apk
           path: app.apk
-          if-no-files-found: error
 
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          files: app.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
