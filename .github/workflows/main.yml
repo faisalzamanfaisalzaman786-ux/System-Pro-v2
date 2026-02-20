@@ -31,21 +31,20 @@ jobs:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install dependencies
-        run: npm install -g @bubblewrap/cli sharp
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
 
-      - name: Decode and convert icon to PNG
+      # ✅ FIXED: Simply decode the base64 PNG sent from HTML
+      - name: Decode and save icon
         run: |
-          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > input_image
-          node -e "
-          const sharp = require('sharp');
-          sharp('input_image')
-            .resize(192, 192, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-            .png()
-            .toFile('icon.png')
-            .then(() => console.log('✅ Converted to PNG'))
-            .catch(err => { console.error(err); process.exit(1); });
-          "
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon.png
+          echo "✅ Icon saved (size: $(wc -c < icon.png) bytes)"
+          file icon.png
+          # Optional: verify it's a PNG
+          if ! file icon.png | grep -i "png"; then
+            echo "❌ Decoded file is not a valid PNG"
+            exit 1
+          fi
 
       - name: Create Web App Manifest
         run: |
