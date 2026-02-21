@@ -1,4 +1,4 @@
-name: Web to APK (PWABuilder) – 100% کام کرے گا
+name: Web to APK (PWABuilder – صحیح طریقہ)
 
 on:
   repository_dispatch:
@@ -29,12 +29,18 @@ jobs:
       - name: Install PWABuilder CLI
         run: npm install -g @pwabuilder/cli
 
-      - name: Generate APK with PWABuilder
+      - name: Generate manifest.json from URL
         run: |
-          pwa create apk \
+          pwa generate \
             --name "${{ github.event.client_payload.app_name }}" \
             --url "${{ github.event.client_payload.app_url }}" \
             --icon icon.png \
+            --output manifest.json
+
+      - name: Package APK using manifest
+        run: |
+          pwa package apk \
+            --manifest manifest.json \
             --output app.apk
 
       - name: Create GitHub Release and Upload APK
