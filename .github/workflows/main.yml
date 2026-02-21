@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + Docker as root)
+name: Web to APK (Bubblewrap + Node + Root)
 
 on:
   repository_dispatch:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: thyrlian/android-sdk:latest
-      options: --user root                     # Run as root so we can install packages
+      options: --user root                     # root کے طور پر چلائیں
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,6 +18,13 @@ jobs:
         run: |
           apt-get update
           apt-get install -y imagemagick
+
+      - name: Install Node.js and npm
+        run: |
+          apt-get update
+          apt-get install -y curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
 
       - name: Decode and convert icon to PNG
         run: |
