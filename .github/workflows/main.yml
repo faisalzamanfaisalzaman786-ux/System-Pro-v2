@@ -1,4 +1,4 @@
-name: Build APK from Dispatch
+name: Build Real APK from Dispatch
 
 on:
   repository_dispatch:
@@ -11,31 +11,58 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Decode and save logo
+      - name: Decode and prepare logo
         run: |
-          echo "${{ github.event.client_payload.logoBase64 }}" | base64 --decode > app_icon.png
+          echo "${{ github.event.client_payload.logoBase64 }}" | base64 --decode > original_logo.png
+          # Install ImageMagick for resizing
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          # Create icons for all densities (replace placeholder icons)
+          convert original_logo.png -resize 48x48! android-template/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert original_logo.png -resize 72x72! android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert original_logo.png -resize 96x96! android-template/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert original_logo.png -resize 144x144! android-template/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert original_logo.png -resize 192x192! android-template/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      - name: Create placeholder APK (demo)
+      - name: Generate unique package name
+        id: package
         run: |
-          echo "App Name: ${{ github.event.client_payload.appName }}" > app_info.txt
-          echo "App URL: ${{ github.event.client_payload.appUrl }}" >> app_info.txt
-          echo "Build time: $(date)" >> app_info.txt
-          mkdir -p dist
-          zip dist/System-Pro-v2.apk app_info.txt app_icon.png
+          # Sanitize app name: lowercase, no spaces, alphanumeric only
+          APP_NAME_SLUG=$(echo "${{ github.event.client_payload.appName }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
+          TIMESTAMP=$(date +%s)
+          PACKAGE_NAME="com.userbuild.${APP_NAME_SLUG}.${TIMESTAMP}"
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Inject package name and app name
+        run: |
+          # Update AndroidManifest.xml
+          sed -i "s/package=\"com\.placeholder\"/package=\"${{ steps.package.outputs.package_name }}\"/g" android-template/app/src/main/AndroidManifest.xml
+          # Update build.gradle
+          sed -i "s/applicationId \"com\.placeholder\"/applicationId \"${{ steps.package.outputs.package_name }}\"/g" android-template/app/build.gradle
+          # Update MainActivity.kt (package line)
+          sed -i "s/package com\.placeholder/package ${{ steps.package.outputs.package_name }}/g" android-template/app/src/main/java/com/placeholder/MainActivity.kt
+          # Update app name in strings.xml
+          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.client_payload.appName }}<\/string>/g" android-template/app/src/main/res/values/strings.xml
+          # Update URL in MainActivity.kt (replace https://example.com)
+          sed -i "s|webView.loadUrl(\".*\")|webView.loadUrl(\"${{ github.event.client_payload.appUrl }}\")|g" android-template/app/src/main/java/com/placeholder/MainActivity.kt
+
+      - name: Build APK with Gradle
+        run: |
+          cd android-template
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: built-apk
-          path: dist/System-Pro-v2.apk
+          path: android-template/app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Create Release
-        id: create_release
+      - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.0
+          tag_name: v3.0-${{ steps.package.outputs.package_name }}
           name: "APK Build ${{ github.event.client_payload.appName }}"
-          files: dist/System-Pro-v2.apk
+          files: android-template/app/build/outputs/apk/debug/app-debug.apk
           draft: false
           prerelease: false
         env:
