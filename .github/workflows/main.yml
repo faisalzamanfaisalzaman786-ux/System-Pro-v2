@@ -1,4 +1,4 @@
-name: Web to APK (Capacitor + Full Debug)
+name: Web to APK (App Builder) – سادہ اور تیز
 
 on:
   repository_dispatch:
@@ -10,15 +10,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Install ImageMagick (icon conversion)
         run: |
@@ -35,69 +26,18 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Capacitor
-        run: npm install -g @capacitor/cli @capacitor/core @capacitor/android
+      - name: Install app-builder
+        run: npm install -g app-builder
 
-      - name: Debug environment
+      - name: Build APK
         run: |
-          echo "JAVA_HOME = $JAVA_HOME"
-          echo "ANDROID_HOME = $ANDROID_HOME"
-          echo "PATH = $PATH"
-          java -version
-          which android || echo "android not in PATH"
-          ls -la $ANDROID_HOME || echo "ANDROID_HOME not accessible"
-
-      - name: Create Capacitor project
-        run: |
-          mkdir myapp
-          cd myapp
-          npm init -y
-          npm install @capacitor/cli @capacitor/core @capacitor/android
-          npx cap init "${{ github.event.client_payload.app_name }}" com.example.app --web-dir www
-          mkdir www
-          cat > www/index.html << EOF
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta http-equiv="refresh" content="0; url=${{ github.event.client_payload.app_url }}" />
-          </head>
-          <body>Loading...</body>
-          </html>
-          EOF
-          npx cap add android
-          # آئیکن کو Android پروجیکٹ میں کاپی کریں
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          cp ../icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-
-      - name: Build APK with verbose output
-        run: |
-          cd myapp
-          npx cap sync android
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace --info
-
-      - name: Find and copy APK
-        run: |
-          echo "Searching for APK files..."
-          find myapp -name "*.apk" -type f
-          APK_PATH=$(find myapp -name "*.apk" -type f | head -1)
-          if [ -z "$APK_PATH" ]; then
-            echo "❌ No APK found!"
-            exit 1
-          fi
-          echo "✅ Found APK at: $APK_PATH"
-          cp "$APK_PATH" app.apk
-
-      - name: Upload APK as artifact (if Release fails)
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-apk
-          path: app.apk
+          app-builder \
+            --name "${{ github.event.client_payload.app_name }}" \
+            --url "${{ github.event.client_payload.app_url }}" \
+            --icon icon.png \
+            --output app.apk
 
       - name: Create GitHub Release and Upload APK
-        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
