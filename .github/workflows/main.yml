@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Decode and save logo
         run: |
@@ -21,32 +21,22 @@ jobs:
           echo "App URL: ${{ github.event.client_payload.appUrl }}" >> app_info.txt
           echo "Build time: $(date)" >> app_info.txt
           mkdir -p dist
-          # Create a zip and rename to .apk (for testing pipeline)
           zip dist/System-Pro-v2.apk app_info.txt app_icon.png
 
       - name: Upload APK as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: built-apk
           path: dist/System-Pro-v2.apk
 
-      - name: Create or update release
+      - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v3.0
-          release_name: "APK Build ${{ github.event.client_payload.appName }}"
+          name: "APK Build ${{ github.event.client_payload.appName }}"
+          files: dist/System-Pro-v2.apk
           draft: false
           prerelease: false
-
-      - name: Upload APK to release
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist/System-Pro-v2.apk
-          asset_name: System-Pro-v2.apk
-          asset_content_type: application/vnd.android.package-archive
