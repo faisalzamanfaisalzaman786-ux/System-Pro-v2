@@ -1,4 +1,4 @@
-name: Web to APK (Cordova) – ڈیبگ کے ساتھ
+name: Web to APK (Capacitor)
 
 on:
   repository_dispatch:
@@ -35,6 +35,59 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Capacitor
+        run: npm install -g @capacitor/cli @capacitor/core @capacitor/android
+
+      - name: Create Capacitor project
+        run: |
+          mkdir myapp
+          cd myapp
+          npm init -y
+          npm install @capacitor/cli @capacitor/core @capacitor/android
+          npx cap init "${{ github.event.client_payload.app_name }}" com.example.app --web-dir www
+          mkdir www
+          cat > www/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=${{ github.event.client_payload.app_url }}" />
+          </head>
+          <body>Loading...</body>
+          </html>
+          EOF
+          npx cap add android
+          # آئیکن کو Android پروجیکٹ میں کاپی کریں
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          cp ../icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+
+      - name: Build APK
+        run: |
+          cd myapp
+          npx cap sync android
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Find and copy APK
+        run: |
+          APK_PATH=$(find myapp/android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No APK found!"
+            find myapp/android -name "*.apk"
+            exit 1
+          fi
+          cp "$APK_PATH" app.apk
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: "APK Build #${{ github.run_id }}"
+          body: "✅ App: ${{ github.event.client_payload.app_name }}"
+          files: app.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Cordova
         run: npm install -g cordova
 
