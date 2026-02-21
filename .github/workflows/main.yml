@@ -11,31 +11,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Decode and prepare logo
+      - name: Decode and prepare logo (ultra debug)
         run: |
-          set -x  # har command print karega
+          set -x
           echo "Base64 length: ${#LOGO_BASE64}"
-          echo "$LOGO_BASE64" | head -c 100   # pehle 100 characters check (safe)
-          # Decode
-          echo "$LOGO_BASE64" | base64 --decode > original_logo.png || { echo "❌ Base64 decode failed"; exit 1; }
+          echo "First 100 chars: ${LOGO_BASE64:0:100}"
+          
+          # Base64 decode
+          echo "$LOGO_BASE64" | base64 --decode > original_logo.png || { echo "❌ base64 decode failed"; exit 1; }
+          
+          # Check file size
+          echo "File size: $(wc -c < original_logo.png) bytes"
+          
+          # Show first 20 bytes in hex (to see header)
+          hexdump -C original_logo.png | head -n 2
+          
+          # Check file type with 'file' command
           file original_logo.png
-          # Install ImageMagick
+          
+          # Try to identify with ImageMagick
           sudo apt-get update && sudo apt-get install -y imagemagick
-          # Target directories ensure karein
+          identify original_logo.png || { echo "❌ Not a valid image"; exit 1; }
+          
+          # Create target directories
           mkdir -p android-template/app/src/main/res/mipmap-mdpi
           mkdir -p android-template/app/src/main/res/mipmap-hdpi
           mkdir -p android-template/app/src/main/res/mipmap-xhdpi
           mkdir -p android-template/app/src/main/res/mipmap-xxhdpi
           mkdir -p android-template/app/src/main/res/mipmap-xxxhdpi
-          # Icons resize karein
+          
+          # Resize icons
           convert original_logo.png -resize 48x48! android-template/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert original_logo.png -resize 72x72! android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert original_logo.png -resize 96x96! android-template/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert original_logo.png -resize 144x144! android-template/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert original_logo.png -resize 192x192! android-template/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          
           echo "✅ Logo successfully processed"
         env:
           LOGO_BASE64: ${{ github.event.client_payload.logoBase64 }}
+
+      - name: List android-template contents
+        run: |
+          ls -la android-template || echo "android-template folder not found!"
+          ls -la android-template/app/src/main/AndroidManifest.xml || echo "AndroidManifest.xml missing!"
 
       - name: Generate unique package name
         id: package
@@ -48,9 +67,11 @@ jobs:
 
       - name: Inject package name and app name
         run: |
-          # Pehle check karein ke android-template maujood hai
-          ls -la android-template
-          # AndroidManifest.xml update
+          if [ ! -f android-template/app/src/main/AndroidManifest.xml ]; then
+            echo "❌ AndroidManifest.xml not found! Ensure android-template is in root."
+            exit 1
+          fi
+          
           sed -i "s/package=\"com\.placeholder\"/package=\"${{ steps.package.outputs.package_name }}\"/g" android-template/app/src/main/AndroidManifest.xml
           sed -i "s/applicationId \"com\.placeholder\"/applicationId \"${{ steps.package.outputs.package_name }}\"/g" android-template/app/build.gradle
           sed -i "s/package com\.placeholder/package ${{ steps.package.outputs.package_name }}/g" android-template/app/src/main/java/com/placeholder/MainActivity.kt
@@ -63,7 +84,6 @@ jobs:
           cd android-template
           chmod +x gradlew
           ./gradlew assembleDebug
-          echo "✅ APK built successfully"
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
