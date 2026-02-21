@@ -73,9 +73,18 @@ jobs:
           cd MyApp
           cordova build android --release
 
-      - name: Copy APK to root
+      - name: Find and copy APK
         run: |
-          find MyApp/platforms/android/app/build/outputs/apk/ -name "*.apk" -exec cp {} app.apk \;
+          set -x
+          # پہلے release والے APK کو ڈھونڈیں
+          APK_PATH=$(find MyApp/platforms/android/app/build/outputs/apk -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No APK found! Search output:"
+            find MyApp/platforms/android/app/build/outputs -type f
+            exit 1
+          fi
+          echo "✅ Found APK at: $APK_PATH"
+          cp "$APK_PATH" app.apk
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
