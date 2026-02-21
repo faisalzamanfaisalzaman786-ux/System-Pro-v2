@@ -1,313 +1,126 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Web → APK · PWABuilder</title>
-    <style>
-        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        body { background: #0d1117; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; padding: 16px; }
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 24px; padding: 28px; width: 100%; max-width: 520px; }
-        h2 { margin: 0 0 8px 0; color: #f0f6fc; }
-        .sub { color: #8b949e; font-size: 0.9rem; margin-bottom: 24px; border-bottom: 1px solid #30363d; padding-bottom: 16px; }
-        label { display: block; margin: 20px 0 6px; color: #e6edf3; font-weight: 500; }
-        input, .file-input { width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 12px; padding: 14px 16px; color: white; font-size: 1rem; }
-        .token-row { display: flex; gap: 8px; }
-        .token-row input { flex: 1; }
-        .token-row button { background: #1f6feb; color: white; border: none; border-radius: 12px; padding: 14px 20px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-        .btn { background: #238636; color: white; border: none; border-radius: 40px; padding: 16px; font-weight: 600; width: 100%; margin: 30px 0 12px; cursor: pointer; }
-        .btn:disabled { opacity: 0.5; pointer-events: none; }
-        #status { background: #0d1117; border-radius: 16px; padding: 16px; margin-top: 20px; border: 1px solid #30363d; display: none; }
-        .progress-bar { height: 8px; background: #3d444d; border-radius: 40px; margin: 12px 0; overflow: hidden; }
-        .progress-fill { height: 100%; width: 0%; background: #2f81f7; transition: width 0.3s; }
-        .log { font-family: monospace; font-size: 0.8rem; color: #7d8590; max-height: 150px; overflow-y: auto; padding: 8px; background: #010409; border-radius: 8px; }
-        .download-btn { display: block; background: #1f6feb; color: white; text-decoration: none; text-align: center; padding: 16px; border-radius: 40px; margin-top: 20px; }
-        .suggestion { background: #1f2a3f; border-left: 4px solid #f78166; padding: 12px; border-radius: 8px; margin-top: 15px; color: #e6edf3; }
-        .mode-row { margin: 20px 0; display: flex; gap: 20px; }
-        .mode-row label { display: inline-flex; align-items: center; gap: 6px; font-weight: normal; margin: 0; }
-        .note { color: #8b949e; font-size: 0.8rem; margin-top: 5px; }
-    </style>
-</head>
-<body>
-<div class="card">
-    <h2>📱 AI Web → APK</h2>
-    <div class="sub">Auto‑converts images • fetches real error logs</div>
+name: Web to APK (Cordova Debug) – یقینی کام
 
-    <label>🔑 GitHub Token (repo & actions scope)</label>
-    <div class="token-row">
-        <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxxxxxx" required>
-        <button id="saveTokenBtn" onclick="saveToken()">Save</button>
-    </div>
+on:
+  repository_dispatch:
+    types: [build-apk]
 
-    <label>📦 App Name</label>
-    <input type="text" id="appName" placeholder="My App" required>
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    <!-- Mode selection -->
-    <div class="mode-row">
-        <label>
-            <input type="radio" name="mode" value="url" checked onclick="toggleMode()"> 🌐 Website URL
-        </label>
-        <label>
-            <input type="radio" name="mode" value="zip" onclick="toggleMode()"> 📦 Upload HTML project (ZIP)
-        </label>
-    </div>
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    <!-- Website URL input (visible by default) -->
-    <div id="urlModeDiv">
-        <label>🌐 Website URL</label>
-        <input type="url" id="appUrl" placeholder="https://example.com" value="https://" required>
-    </div>
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-    <!-- ZIP upload (hidden by default) -->
-    <div id="zipModeDiv" style="display: none;">
-        <label>📦 HTML Project ZIP</label>
-        <input type="file" id="appZip" accept=".zip" class="file-input">
-        <div class="note">ZIP must contain index.html at root (CSS, JS, images can be inside)</div>
-    </div>
+      - name: Install ImageMagick (icon conversion)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
 
-    <label>🖼️ Icon (any image – auto‑converted to PNG)</label>
-    <input type="file" id="appIcon" accept="image/*" class="file-input" required>
+      - name: Decode and convert icon to PNG
+        run: |
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
+          convert icon_raw -resize 512x512! icon.png
 
-    <button class="btn" id="buildBtn" onclick="startBuild()">⚡ Start AI Build</button>
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-    <div id="status">
-        <div style="display: flex; justify-content: space-between;">
-            <span id="statusMsg">Initializing...</span>
-            <span id="statusPercent">0%</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-        <div class="log" id="log">⏳ Ready</div>
-    </div>
+      - name: Install Cordova
+        run: npm install -g cordova
 
-    <div id="result"></div>
-    <div id="suggestion" class="suggestion" style="display:none;"></div>
-    <div id="error" style="color: #f85149; margin-top: 15px;"></div>
-</div>
+      - name: Generate unique package name
+        id: package
+        run: |
+          SANITIZED=$(echo "${{ github.event.client_payload.app_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
+          if [[ $SANITIZED =~ ^[0-9] ]]; then
+            SANITIZED="app${SANITIZED}"
+          fi
+          TIMESTAMP=$(date +%s)
+          PACKAGE_NAME="com.userbuild.${SANITIZED}.ts${TIMESTAMP}"
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "✅ Generated package name: $PACKAGE_NAME"
 
-<script>
-    const GITHUB_OWNER = 'faisalzamanfaisalzaman786-ux';
-    const GITHUB_REPO  = 'System-Pro-v2';
-    let pollInterval;
+      - name: Create Cordova project
+        run: |
+          cordova create MyApp ${{ steps.package.outputs.package_name }} "${{ github.event.client_payload.app_name }}"
+          cd MyApp
+          cordova platform add android
 
-    // Load saved token on page load
-    window.addEventListener('load', function() {
-        const savedToken = localStorage.getItem('github_token');
-        if (savedToken) {
-            document.getElementById('token').value = savedToken;
-        }
-    });
+      - name: Add icon to project
+        run: |
+          cp icon.png MyApp/www/icon.png
+          cd MyApp
+          sed -i '/<\/widget>/i \ \ <platform name="android">\n    <icon src="www\/icon.png" density="hdpi" \/>\n  <\/platform>' config.xml
 
-    function saveToken() {
-        const token = document.getElementById('token').value.trim();
-        if (token) {
-            localStorage.setItem('github_token', token);
-            alert('Token saved to local storage.');
-        } else {
-            alert('Please enter a token first.');
-        }
-    }
+      - name: Prepare www folder (URL mode)
+        if: github.event.client_payload.mode == 'url'
+        run: |
+          cat > MyApp/www/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="Content-Security-Policy" content="default-src *; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'; img-src * data: 'unsafe-inline'; connect-src * 'unsafe-inline'; frame-src *;">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body>
+            <script>
+              window.location.href = "${{ github.event.client_payload.app_url }}";
+            </script>
+          </body>
+          </html>
+          EOF
 
-    function toggleMode() {
-        const mode = document.querySelector('input[name="mode"]:checked').value;
-        document.getElementById('urlModeDiv').style.display = mode === 'url' ? 'block' : 'none';
-        document.getElementById('zipModeDiv').style.display = mode === 'zip' ? 'block' : 'none';
-        // Update required attributes
-        document.getElementById('appUrl').required = (mode === 'url');
-        document.getElementById('appZip').required = (mode === 'zip');
-    }
+      - name: Prepare www folder (ZIP mode)
+        if: github.event.client_payload.mode == 'zip'
+        run: |
+          echo "${{ github.event.client_payload.app_zip_base64 }}" | base64 -d > project.zip
+          unzip project.zip -d MyApp/www/
+          if [ ! -f MyApp/www/index.html ]; then
+            echo "❌ No index.html found in ZIP root"
+            exit 1
+          fi
 
-    function resizeImage(file, maxSize = 192) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (e) => {
-                const img = new Image();
-                img.src = e.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width, height = img.height;
-                    if (width > height) {
-                        if (width > maxSize) { height *= maxSize / width; width = maxSize; }
-                    } else {
-                        if (height > maxSize) { width *= maxSize / height; height = maxSize; }
-                    }
-                    canvas.width = width; canvas.height = height;
-                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/png').split(',')[1]);
-                };
-                img.onerror = reject;
-            };
-            reader.onerror = reject;
-        });
-    }
+      - name: Build APK (debug)
+        run: |
+          cd MyApp
+          cordova build android --debug
 
-    function readFileAsBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
-        });
-    }
+      - name: Find and copy APK
+        run: |
+          echo "🔍 Searching for APK..."
+          find MyApp -name "*.apk" -type f
+          APK_PATH=$(find MyApp -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No APK found!"
+            exit 1
+          fi
+          echo "✅ Found APK at: $APK_PATH"
+          cp "$APK_PATH" app.apk
 
-    function updateStatus(message, percent) {
-        document.getElementById('statusMsg').innerText = message;
-        document.getElementById('statusPercent').innerText = percent + '%';
-        document.getElementById('progressFill').style.width = percent + '%';
-    }
-    function appendLog(line) {
-        const logDiv = document.getElementById('log');
-        logDiv.innerHTML += '<br>› ' + line;
-        logDiv.scrollTop = logDiv.scrollHeight;
-    }
-    function showSuggestion(html) {
-        const sugg = document.getElementById('suggestion');
-        sugg.innerHTML = html;
-        sugg.style.display = 'block';
-    }
+      - name: Upload APK as artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-apk
+          path: app.apk
 
-    async function startBuild() {
-        const token = document.getElementById('token').value.trim();
-        const name = document.getElementById('appName').value.trim();
-        const mode = document.querySelector('input[name="mode"]:checked').value;
-        const iconFile = document.getElementById('appIcon').files[0];
-
-        if (!token || !name || !iconFile) return alert('Please fill all fields');
-
-        let urlOrZip = '';
-        if (mode === 'url') {
-            urlOrZip = document.getElementById('appUrl').value.trim();
-            if (!urlOrZip) return alert('Please enter a URL');
-        } else {
-            const zipFile = document.getElementById('appZip').files[0];
-            if (!zipFile) return alert('Please select a ZIP file');
-            urlOrZip = await readFileAsBase64(zipFile);
-        }
-
-        document.getElementById('buildBtn').disabled = true;
-        document.getElementById('status').style.display = 'block';
-        document.getElementById('result').innerHTML = '';
-        document.getElementById('suggestion').style.display = 'none';
-        document.getElementById('error').innerHTML = '';
-
-        updateStatus('Resizing icon...', 10);
-        appendLog('🖼️ Converting image to PNG...');
-
-        try {
-            const resizedBase64 = await resizeImage(iconFile);
-            appendLog('✅ Image ready.');
-
-            const payload = {
-                event_type: 'build-apk',
-                client_payload: {
-                    app_name: name,
-                    app_icon: resizedBase64,
-                    mode: mode
-                }
-            };
-            if (mode === 'url') {
-                payload.client_payload.app_url = urlOrZip;
-            } else {
-                payload.client_payload.app_zip_base64 = urlOrZip;
-            }
-
-            updateStatus('Triggering GitHub...', 20);
-            const dispatchRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/dispatches`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `token ${token}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                },
-                body: JSON.stringify(payload)
-            });
-            if (!dispatchRes.ok) throw new Error(`HTTP ${dispatchRes.status}`);
-            appendLog('✅ Dispatch accepted.');
-            updateStatus('Workflow started', 30);
-            setTimeout(() => pollWorkflowRun(token), 5000);
-        } catch (err) {
-            appendLog(`❌ ${err.message}`);
-            updateStatus('Build failed', 0);
-            showSuggestion('💡 Check your token and repository name.');
-            document.getElementById('buildBtn').disabled = false;
-        }
-    }
-
-    async function pollWorkflowRun(token) {
-        appendLog('🔍 Checking for run...');
-        try {
-            const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=1`, {
-                headers: { 'Authorization': `token ${token}` }
-            });
-            const runsData = await runsRes.json();
-            const run = runsData.workflow_runs?.[0];
-            if (!run) throw new Error('No runs');
-            appendLog(`📋 Found run #${run.id}`);
-            pollRunStatus(token, run.id);
-        } catch {
-            setTimeout(() => pollWorkflowRun(token), 8000);
-        }
-    }
-
-    async function pollRunStatus(token, runId) {
-        pollInterval = setInterval(async () => {
-            try {
-                const runRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}`, {
-                    headers: { 'Authorization': `token ${token}` }
-                });
-                const run = await runRes.json();
-                appendLog(`⏳ Status: ${run.status}`);
-                if (run.status === 'completed') {
-                    clearInterval(pollInterval);
-                    if (run.conclusion === 'success') {
-                        updateStatus('✅ Build successful!', 100);
-                        await fetchReleaseAsset(token, runId);
-                    } else {
-                        updateStatus('❌ Build failed.', 0);
-                        await fetchFailedJobLogs(token, runId);
-                    }
-                } else {
-                    updateStatus(`Building...`, 70);
-                }
-            } catch (err) {
-                appendLog(`⚠️ Poll error`);
-            }
-        }, 7000);
-    }
-
-    async function fetchFailedJobLogs(token, runId) {
-        try {
-            const jobsRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/jobs`, {
-                headers: { 'Authorization': `token ${token}` }
-            });
-            const jobs = await jobsRes.json();
-            const failedJob = jobs.jobs?.find(j => j.conclusion === 'failure');
-            if (failedJob) {
-                const failedStep = failedJob.steps?.find(s => s.conclusion === 'failure');
-                const stepName = failedStep ? failedStep.name : 'unknown';
-                showSuggestion(`❌ Failed: ${stepName}<br><a href="${failedJob.html_url}" target="_blank">View logs</a>`);
-            } else {
-                showSuggestion(`<a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">View full logs</a>`);
-            }
-        } catch {
-            showSuggestion(`<a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">View logs</a>`);
-        }
-        document.getElementById('buildBtn').disabled = false;
-    }
-
-    async function fetchReleaseAsset(token, runId) {
-        try {
-            const releaseRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tags/build-${runId}`);
-            if (!releaseRes.ok) throw new Error();
-            const release = await releaseRes.json();
-            const asset = release.assets.find(a => a.name.endsWith('.apk'));
-            if (asset) {
-                document.getElementById('result').innerHTML = `<a href="${asset.browser_download_url}" class="download-btn" target="_blank">📥 Download APK</a>`;
-            } else throw new Error();
-        } catch {
-            document.getElementById('result').innerHTML = `<p style="color:#f78166;">APK ready – <a href="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}" target="_blank">download from Actions artifacts</a></p>`;
-        }
-        document.getElementById('buildBtn').disabled = false;
-    }
-</script>
-</body>
-</html>
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: "APK Build #${{ github.run_id }}"
+          body: "✅ App: ${{ github.event.client_payload.app_name }}"
+          files: app.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
