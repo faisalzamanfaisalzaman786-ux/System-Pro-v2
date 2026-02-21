@@ -1,4 +1,4 @@
-name: Web to APK (PWABuilder API) – یقینی کام
+name: Web to APK (PWABuilder API) – ڈیبگ کے ساتھ
 
 on:
   repository_dispatch:
@@ -20,8 +20,9 @@ jobs:
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
-          # دوبارہ base64 میں تبدیل کریں (API کے لیے)
-          base64 -w0 icon.png > icon_base64.txt
+          # ڈیٹا URL بنائیں (PWABuilder API کو اس فارمیٹ کی ضرورت ہے)
+          echo -n "data:image/png;base64," > icon_data_url.txt
+          base64 -w0 icon.png >> icon_data_url.txt
 
       - name: Generate safe package ID
         run: |
@@ -29,30 +30,41 @@ jobs:
           SAFE_NAME=$(echo "${{ github.event.client_payload.app_name }}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
           echo "PACKAGE_ID=com.example.$SAFE_NAME" >> $GITHUB_ENV
 
-      - name: Call PWABuilder API
+      - name: Create JSON payload
         run: |
-          # JSON پے لوڈ تیار کریں
           cat > payload.json << EOF
           {
             "name": "${{ github.event.client_payload.app_name }}",
             "startUrl": "${{ github.event.client_payload.app_url }}",
-            "icon": "$(cat icon_base64.txt)",
+            "icon": "$(cat icon_data_url.txt)",
             "packageId": "${{ env.PACKAGE_ID }}",
             "display": "standalone",
             "themeColor": "#000000",
             "backgroundColor": "#ffffff"
           }
           EOF
+          # JSON کی تصدیق کریں
+          cat payload.json
 
-          # API کو درخواست بھیجیں اور جواب کو app.zip میں محفوظ کریں
+      - name: Call PWABuilder API
+        run: |
+          # API کو کال کریں اور جواب محفوظ کریں
           curl -X POST https://pwabuilder.com/api/createAppPackage \
             -H "Content-Type: application/json" \
             --data @payload.json \
-            --output app.zip
+            --output app.zip \
+            --fail -v 2> curl_error.log || {
+              echo "API call failed. Response:"
+              cat app.zip 2>/dev/null || echo "No response body"
+              echo "Curl error log:"
+              cat curl_error.log
+              exit 1
+            }
 
-          # ZIP سے APK نکالیں
+      - name: Extract APK from ZIP
+        run: |
           unzip -p app.zip > app.apk || {
-            echo "APK نکالنے میں ناکامی"
+            echo "ZIP سے APK نکالنے میں ناکامی"
             exit 1
           }
 
