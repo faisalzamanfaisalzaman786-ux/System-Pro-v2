@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + fixed)
+name: Web to APK (Bubblewrap + fixed JDK)
 
 on:
   repository_dispatch:
@@ -14,57 +14,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install ImageMagick
-        run: |
-          apt-get update
-          apt-get install -y imagemagick
+      # ... (ImageMagick, Node.js, icon conversion, SDK licenses, Install Bubblewrap, manifest.json steps as before) ...
 
-      - name: Install Node.js and npm
+      - name: Build APK with Bubblewrap (using system JDK)
         run: |
-          apt-get update
-          apt-get install -y curl
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y nodejs
-
-      - name: Decode and convert icon to PNG
-        run: |
-          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
-          convert icon_raw -resize 512x512! icon.png
-
-      - name: Accept Android SDK licenses
-        run: |
-          SDKMANAGER_PATH=$(find /opt/android-sdk /usr/local/android-sdk -name sdkmanager -type f 2>/dev/null | head -n1)
-          if [ -z "$SDKMANAGER_PATH" ]; then
-            SDKMANAGER_PATH="/opt/android-sdk/cmdline-tools/latest/bin/sdkmanager"
-          fi
-          yes | $SDKMANAGER_PATH --licenses
-
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
-      - name: Create manifest.json
-        run: |
-          cat > manifest.json << EOF
-          {
-            "name": "${{ github.event.client_payload.app_name }}",
-            "short_name": "${{ github.event.client_payload.app_name }}",
-            "start_url": "${{ github.event.client_payload.app_url }}",
-            "display": "standalone",
-            "background_color": "#ffffff",
-            "theme_color": "#000000",
-            "icons": [
-              {
-                "src": "icon.png",
-                "sizes": "512x512",
-                "type": "image/png"
-              }
-            ]
-          }
-          EOF
-
-      - name: Build APK with Bubblewrap (non-interactive)
-        run: |
-          bubblewrap init --manifest manifest.json --directory app --jdk 11
+          set -x
+          export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+          echo "Using JAVA_HOME=$JAVA_HOME"
+          bubblewrap init --manifest manifest.json --directory app --jdk "$JAVA_HOME"
           cd app
           bubblewrap build --verbose
           cp app-release-signed.apk ../app.apk
