@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + Docker)
+name: Web to APK (Bubblewrap + Docker as root)
 
 on:
   repository_dispatch:
@@ -8,15 +8,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: thyrlian/android-sdk:latest   # Full Android SDK, Java, Node pre‑installed
+      image: thyrlian/android-sdk:latest
+      options: --user root                     # Run as root so we can install packages
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install ImageMagick (icon conversion)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
+          apt-get update
+          apt-get install -y imagemagick
 
       - name: Decode and convert icon to PNG
         run: |
@@ -53,17 +54,6 @@ jobs:
           bubblewrap build
           cp app-release-signed.apk ../app.apk
 
-      - name: Create GitHub Release and Upload APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_id }}
-          name: "APK Build #${{ github.run_id }}"
-          body: "✅ App: ${{ github.event.client_payload.app_name }}"
-          files: app.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
