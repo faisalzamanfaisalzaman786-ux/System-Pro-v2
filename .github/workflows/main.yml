@@ -1,4 +1,4 @@
-name: Web to APK (web2apk) – No SDK needed
+name: Web to APK – Docker (100% reliable)
 
 on:
   repository_dispatch:
@@ -7,35 +7,45 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: thyrlian/android-sdk:latest   # Full Android SDK + Java + Node pre-installed
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Install Bubblewrap (inside container)
+        run: npm install -g @bubblewrap/cli
 
-      - name: Install ImageMagick (for icon conversion)
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-
-      - name: Decode and convert icon to PNG
+      - name: Decode and save icon
         run: |
-          # Save base64 to a file
-          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
-          # Convert any image to 512x512 PNG (imagemagick handles jpeg, png, etc.)
-          convert icon_raw -resize 512x512! icon.png
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app-icon.png
 
-      - name: Install web2apk
-        run: npm install -g web2apk
-
-      - name: Generate APK
+      - name: Create manifest.json
         run: |
-          web2apk generate \
-            --name "${{ github.event.client_payload.app_name }}" \
-            --url "${{ github.event.client_payload.app_url }}" \
-            --icon icon.png \
-            --output app.apk
+          cat > manifest.json << EOF
+          {
+            "name": "${{ github.event.client_payload.app_name }}",
+            "short_name": "${{ github.event.client_payload.app_name }}",
+            "start_url": "${{ github.event.client_payload.app_url }}",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#000000",
+            "icons": [
+              {
+                "src": "app-icon.png",
+                "sizes": "512x512",
+                "type": "image/png"
+              }
+            ]
+          }
+          EOF
+
+      - name: Build APK with Bubblewrap
+        run: |
+          bubblewrap init --manifest manifest.json --directory app
+          cd app
+          bubblewrap build
+          cp app-release-signed.apk ../app.apk
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
