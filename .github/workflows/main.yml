@@ -1,60 +1,10 @@
-name: Web to APK – Docker (100% reliable)
-
-on:
-  repository_dispatch:
-    types: [build-apk]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    container:
-      image: thyrlian/android-sdk:latest   # Full Android SDK + Java + Node pre-installed
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Bubblewrap (inside container)
-        run: npm install -g @bubblewrap/cli
-
-      - name: Decode and save icon
-        run: |
-          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > app-icon.png
-
-      - name: Create manifest.json
-        run: |
-          cat > manifest.json << EOF
-          {
-            "name": "${{ github.event.client_payload.app_name }}",
-            "short_name": "${{ github.event.client_payload.app_name }}",
-            "start_url": "${{ github.event.client_payload.app_url }}",
-            "display": "standalone",
-            "background_color": "#ffffff",
-            "theme_color": "#000000",
-            "icons": [
-              {
-                "src": "app-icon.png",
-                "sizes": "512x512",
-                "type": "image/png"
-              }
-            ]
-          }
-          EOF
-
-      - name: Build APK with Bubblewrap
-        run: |
-          bubblewrap init --manifest manifest.json --directory app
-          cd app
-          bubblewrap build
-          cp app-release-signed.apk ../app.apk
-
-      - name: Create GitHub Release and Upload APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_id }}
-          name: "APK Build #${{ github.run_id }}"
-          body: "✅ App: ${{ github.event.client_payload.app_name }}\n🌐 URL: ${{ github.event.client_payload.app_url }}"
-          files: app.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+- name: Generate APK via PWABuilder API
+  run: |
+    curl -X POST https://pwabuilder.com/api/createAppPackage \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "${{ github.event.client_payload.app_name }}",
+        "startUrl": "${{ github.event.client_payload.app_url }}",
+        "icon": "${{ github.event.client_payload.app_icon }}",
+        "packageId": "com.example.app"
+      }' --output app.apk
