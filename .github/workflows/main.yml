@@ -1,27 +1,52 @@
-- name: Decode logo and save
-  run: |
-    echo "${{ github.event.client_payload.logoBase64 }}" | base64 --decode > app_icon.png
+name: Build APK from Dispatch
 
-- name: Clone Android template
-  run: git clone https://github.com/your-android-template.git android-app
+on:
+  repository_dispatch:
+    types: [build-apk]
 
-- name: Inject dynamic package name
-  run: |
-    PACKAGE_NAME="com.userbuild.$(echo "${{ github.event.client_payload.appName }}" | tr '[:upper:]' '[:lower:]' | tr -d ' ').$(date +%s)"
-    sed -i "s/APPLICATION_ID_PLACEHOLDER/$PACKAGE_NAME/g" android-app/app/build.gradle
-    sed -i "s/package=\"PLACEHOLDER\"/package=\"$PACKAGE_NAME\"/g" android-app/app/src/main/AndroidManifest.xml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-- name: Replace app icon
-  run: cp app_icon.png android-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
+      - name: Decode and save logo
+        run: |
+          echo "${{ github.event.client_payload.logoBase64 }}" | base64 --decode > app_icon.png
 
-- name: Build APK
-  run: |
-    cd android-app
-    chmod +x gradlew
-    ./gradlew assembleRelease
+      - name: Create placeholder APK (demo)
+        run: |
+          echo "App Name: ${{ github.event.client_payload.appName }}" > app_info.txt
+          echo "App URL: ${{ github.event.client_payload.appUrl }}" >> app_info.txt
+          echo "Build time: $(date)" >> app_info.txt
+          mkdir -p dist
+          # Create a zip and rename to .apk (for testing pipeline)
+          zip dist/System-Pro-v2.apk app_info.txt app_icon.png
 
-- name: Upload APK
-  uses: actions/upload-artifact@v3
-  with:
-    name: built-apk
-    path: android-app/app/build/outputs/apk/release/*.apk
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-apk
+          path: dist/System-Pro-v2.apk
+
+      - name: Create or update release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v3.0
+          release_name: "APK Build ${{ github.event.client_payload.appName }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload APK to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/System-Pro-v2.apk
+          asset_name: System-Pro-v2.apk
+          asset_content_type: application/vnd.android.package-archive
