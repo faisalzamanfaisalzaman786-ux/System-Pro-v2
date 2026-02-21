@@ -1,4 +1,4 @@
-name: Web to APK (PWABuilder API) – ڈیبگ کے ساتھ
+name: Web to APK (Cordova) – آسان اور یقینی
 
 on:
   repository_dispatch:
@@ -11,6 +11,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install ImageMagick (icon conversion)
         run: |
           sudo apt-get update
@@ -20,53 +29,53 @@ jobs:
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
-          # ڈیٹا URL بنائیں (PWABuilder API کو اس فارمیٹ کی ضرورت ہے)
-          echo -n "data:image/png;base64," > icon_data_url.txt
-          base64 -w0 icon.png >> icon_data_url.txt
 
-      - name: Generate safe package ID
-        run: |
-          # خالی جگہیں ہٹائیں اور چھوٹے حروف میں کریں
-          SAFE_NAME=$(echo "${{ github.event.client_payload.app_name }}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-          echo "PACKAGE_ID=com.example.$SAFE_NAME" >> $GITHUB_ENV
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Create JSON payload
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova project
         run: |
-          cat > payload.json << EOF
-          {
-            "name": "${{ github.event.client_payload.app_name }}",
-            "startUrl": "${{ github.event.client_payload.app_url }}",
-            "icon": "$(cat icon_data_url.txt)",
-            "packageId": "${{ env.PACKAGE_ID }}",
-            "display": "standalone",
-            "themeColor": "#000000",
-            "backgroundColor": "#ffffff"
-          }
+          cordova create MyApp com.example.app "${{ github.event.client_payload.app_name }}"
+          cd MyApp
+          cordova platform add android
+
+      - name: Add icon to project
+        run: |
+          cp icon.png MyApp/www/icon.png
+          cd MyApp
+          # config.xml میں آئیکن شامل کریں
+          sed -i '/<\/widget>/i \ \ <platform name="android">\n    <icon src="www\/icon.png" density="hdpi" \/>\n  <\/platform>' config.xml
+
+      - name: Set up index.html to load website
+        run: |
+          cat > MyApp/www/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="Content-Security-Policy" content="default-src *; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'; img-src * data: 'unsafe-inline'; connect-src * 'unsafe-inline'; frame-src *;">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body>
+            <script>
+              window.location.href = "${{ github.event.client_payload.app_url }}";
+            </script>
+          </body>
+          </html>
           EOF
-          # JSON کی تصدیق کریں
-          cat payload.json
 
-      - name: Call PWABuilder API
+      - name: Build APK with Cordova
         run: |
-          # API کو کال کریں اور جواب محفوظ کریں
-          curl -X POST https://pwabuilder.com/api/createAppPackage \
-            -H "Content-Type: application/json" \
-            --data @payload.json \
-            --output app.zip \
-            --fail -v 2> curl_error.log || {
-              echo "API call failed. Response:"
-              cat app.zip 2>/dev/null || echo "No response body"
-              echo "Curl error log:"
-              cat curl_error.log
-              exit 1
-            }
+          cd MyApp
+          cordova build android --release
 
-      - name: Extract APK from ZIP
+      - name: Copy APK to root
         run: |
-          unzip -p app.zip > app.apk || {
-            echo "ZIP سے APK نکالنے میں ناکامی"
-            exit 1
-          }
+          find MyApp/platforms/android/app/build/outputs/apk/ -name "*.apk" -exec cp {} app.apk \;
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
