@@ -1,4 +1,4 @@
-name: Web to APK (App Builder) – سادہ اور تیز
+name: Web to APK (url2apk Docker)
 
 on:
   repository_dispatch:
@@ -21,21 +21,13 @@ jobs:
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install app-builder
-        run: npm install -g app-builder
-
-      - name: Build APK
+      - name: Run url2apk Docker container
         run: |
-          app-builder \
-            --name "${{ github.event.client_payload.app_name }}" \
-            --url "${{ github.event.client_payload.app_url }}" \
-            --icon icon.png \
-            --output app.apk
+          docker run --rm -v $(pwd):/data gen2brain/url2apk \
+            -name "${{ github.event.client_payload.app_name }}" \
+            -url "${{ github.event.client_payload.app_url }}" \
+            -icon /data/icon.png \
+            -output /data/app.apk
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
