@@ -13,43 +13,57 @@ jobs:
 
       - name: Decode and prepare logo
         run: |
-          echo "${{ github.event.client_payload.logoBase64 }}" | base64 --decode > original_logo.png
-          # Install ImageMagick for resizing
+          set -x  # har command print karega
+          echo "Base64 length: ${#LOGO_BASE64}"
+          echo "$LOGO_BASE64" | head -c 100   # pehle 100 characters check (safe)
+          # Decode
+          echo "$LOGO_BASE64" | base64 --decode > original_logo.png || { echo "❌ Base64 decode failed"; exit 1; }
+          file original_logo.png
+          # Install ImageMagick
           sudo apt-get update && sudo apt-get install -y imagemagick
-          # Create icons for all densities (replace placeholder icons)
+          # Target directories ensure karein
+          mkdir -p android-template/app/src/main/res/mipmap-mdpi
+          mkdir -p android-template/app/src/main/res/mipmap-hdpi
+          mkdir -p android-template/app/src/main/res/mipmap-xhdpi
+          mkdir -p android-template/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android-template/app/src/main/res/mipmap-xxxhdpi
+          # Icons resize karein
           convert original_logo.png -resize 48x48! android-template/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert original_logo.png -resize 72x72! android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert original_logo.png -resize 96x96! android-template/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert original_logo.png -resize 144x144! android-template/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert original_logo.png -resize 192x192! android-template/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          echo "✅ Logo successfully processed"
+        env:
+          LOGO_BASE64: ${{ github.event.client_payload.logoBase64 }}
 
       - name: Generate unique package name
         id: package
         run: |
-          # Sanitize app name: lowercase, no spaces, alphanumeric only
           APP_NAME_SLUG=$(echo "${{ github.event.client_payload.appName }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
           TIMESTAMP=$(date +%s)
           PACKAGE_NAME="com.userbuild.${APP_NAME_SLUG}.${TIMESTAMP}"
           echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "✅ Package name: $PACKAGE_NAME"
 
       - name: Inject package name and app name
         run: |
-          # Update AndroidManifest.xml
+          # Pehle check karein ke android-template maujood hai
+          ls -la android-template
+          # AndroidManifest.xml update
           sed -i "s/package=\"com\.placeholder\"/package=\"${{ steps.package.outputs.package_name }}\"/g" android-template/app/src/main/AndroidManifest.xml
-          # Update build.gradle
           sed -i "s/applicationId \"com\.placeholder\"/applicationId \"${{ steps.package.outputs.package_name }}\"/g" android-template/app/build.gradle
-          # Update MainActivity.kt (package line)
           sed -i "s/package com\.placeholder/package ${{ steps.package.outputs.package_name }}/g" android-template/app/src/main/java/com/placeholder/MainActivity.kt
-          # Update app name in strings.xml
           sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.client_payload.appName }}<\/string>/g" android-template/app/src/main/res/values/strings.xml
-          # Update URL in MainActivity.kt (replace https://example.com)
           sed -i "s|webView.loadUrl(\".*\")|webView.loadUrl(\"${{ github.event.client_payload.appUrl }}\")|g" android-template/app/src/main/java/com/placeholder/MainActivity.kt
+          echo "✅ Package name and app details injected"
 
       - name: Build APK with Gradle
         run: |
           cd android-template
           chmod +x gradlew
           ./gradlew assembleDebug
+          echo "✅ APK built successfully"
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
