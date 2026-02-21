@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + Node + Root)
+name: Web to APK (Bubblewrap + Root + Licenses)
 
 on:
   repository_dispatch:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: thyrlian/android-sdk:latest
-      options: --user root                     # root کے طور پر چلائیں
+      options: --user root
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,6 +30,10 @@ jobs:
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
@@ -54,11 +58,11 @@ jobs:
           }
           EOF
 
-      - name: Build APK with Bubblewrap
+      - name: Build APK with Bubblewrap (verbose)
         run: |
           bubblewrap init --manifest manifest.json --directory app
           cd app
-          bubblewrap build
+          bubblewrap build --verbose
           cp app-release-signed.apk ../app.apk
 
       - name: Create GitHub Release and Upload APK
