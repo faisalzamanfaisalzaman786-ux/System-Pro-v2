@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + JDK 17 + --noJdk) – حتمی حل
+name: Web to APK (Bubblewrap on default runner)
 
 on:
   repository_dispatch:
@@ -7,50 +7,40 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: thyrlian/android-sdk:latest
-      options: --user root
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install ImageMagick (icon conversion)
         run: |
-          apt-get update
-          apt-get install -y imagemagick
-
-      - name: Install Node.js and npm
-        run: |
-          apt-get update
-          apt-get install -y curl
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y nodejs
-
-      - name: Install JDK 17 (Bubblewrap requires 17)
-        run: |
-          apt-get update
-          apt-get install -y openjdk-17-jdk
-          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
-          echo "PATH=$JAVA_HOME/bin:$PATH" >> $GITHUB_ENV
-
-      - name: Verify Java version
-        run: java -version
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
 
       - name: Decode and convert icon to PNG
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
 
-      - name: Accept Android SDK licenses
-        run: |
-          SDKMANAGER_PATH=$(find /opt/android-sdk /usr/local/android-sdk -name sdkmanager -type f 2>/dev/null | head -n1)
-          if [ -z "$SDKMANAGER_PATH" ]; then
-            SDKMANAGER_PATH="/opt/android-sdk/cmdline-tools/latest/bin/sdkmanager"
-          fi
-          yes | $SDKMANAGER_PATH --licenses
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
       - name: Create manifest.json
         run: |
@@ -72,10 +62,8 @@ jobs:
           }
           EOF
 
-      - name: Build APK with Bubblewrap (using --noJdk)
+      - name: Build APK with Bubblewrap
         run: |
-          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-          # --noJdk سے Bubblewrap JDK انسٹال نہیں کرے گا اور نہ ہی پوچھے گا
           bubblewrap init --manifest manifest.json --directory app --noJdk
           cd app
           bubblewrap build --verbose
