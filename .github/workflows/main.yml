@@ -1,4 +1,4 @@
-name: Code to APK (Cordova Debug)
+name: Smart Studio – Code to APK
 
 on:
   repository_dispatch:
