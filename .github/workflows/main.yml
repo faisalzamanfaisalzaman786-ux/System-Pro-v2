@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + Root + Fixed SDK)
+name: Web to APK (Bubblewrap + Debug)
 
 on:
   repository_dispatch:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install ImageMagick (icon conversion)
+      - name: Install ImageMagick
         run: |
           apt-get update
           apt-get install -y imagemagick
@@ -33,7 +33,6 @@ jobs:
 
       - name: Locate sdkmanager and accept licenses
         run: |
-          # تلاش کریں sdkmanager کہاں ہے
           SDKMANAGER_PATH=$(find /opt/android-sdk /usr/local/android-sdk -name sdkmanager -type f 2>/dev/null | head -n1)
           if [ -z "$SDKMANAGER_PATH" ]; then
             echo "sdkmanager not found, using default path"
@@ -65,14 +64,35 @@ jobs:
           }
           EOF
 
+      - name: Debug environment
+        run: |
+          echo "ANDROID_HOME = $ANDROID_HOME"
+          echo "JAVA_HOME = $JAVA_HOME"
+          echo "PATH = $PATH"
+          which java
+          java -version
+          which npm
+          npm -v
+          which bubblewrap || echo "bubblewrap not in PATH"
+
       - name: Build APK with Bubblewrap (verbose)
         run: |
+          set -x  # Print each command
           bubblewrap init --manifest manifest.json --directory app
           cd app
           bubblewrap build --verbose
           cp app-release-signed.apk ../app.apk
+        continue-on-error: true  # Don't stop if it fails, so we can see logs
+
+      - name: Upload logs if failed
+        if: failure()
+        run: |
+          echo "===== Bubblewrap logs ====="
+          cat app/bubblewrap.log 2>/dev/null || echo "No bubblewrap.log"
+          echo "===== End of logs ====="
 
       - name: Create GitHub Release and Upload APK
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_id }}
