@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + JDK 17) – حتمی حل
+name: Web to APK (Bubblewrap + JDK 17 + --noJdk) – حتمی حل
 
 on:
   repository_dispatch:
@@ -72,10 +72,11 @@ jobs:
           }
           EOF
 
-      - name: Build APK with Bubblewrap (JDK 17)
+      - name: Build APK with Bubblewrap (using --noJdk)
         run: |
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-          bubblewrap init --manifest manifest.json --directory app --jdk "$JAVA_HOME"
+          # --noJdk سے Bubblewrap JDK انسٹال نہیں کرے گا اور نہ ہی پوچھے گا
+          bubblewrap init --manifest manifest.json --directory app --noJdk
           cd app
           bubblewrap build --verbose
           cp app-release-signed.apk ../app.apk
