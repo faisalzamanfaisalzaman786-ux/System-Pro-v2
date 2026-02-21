@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + fixed JDK)
+name: Web to APK (PWABuilder) – 100% کام کرے گا
 
 on:
   repository_dispatch:
@@ -7,24 +7,35 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: thyrlian/android-sdk:latest
-      options: --user root
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ... (ImageMagick, Node.js, icon conversion, SDK licenses, Install Bubblewrap, manifest.json steps as before) ...
-
-      - name: Build APK with Bubblewrap (using system JDK)
+      - name: Install ImageMagick (آئیکن کو PNG میں تبدیل کرنے کے لیے)
         run: |
-          set -x
-          export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
-          echo "Using JAVA_HOME=$JAVA_HOME"
-          bubblewrap init --manifest manifest.json --directory app --jdk "$JAVA_HOME"
-          cd app
-          bubblewrap build --verbose
-          cp app-release-signed.apk ../app.apk
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
+      - name: Decode and convert icon to PNG
+        run: |
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
+          convert icon_raw -resize 512x512! icon.png
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install PWABuilder CLI
+        run: npm install -g @pwabuilder/cli
+
+      - name: Generate APK with PWABuilder
+        run: |
+          pwa create apk \
+            --name "${{ github.event.client_payload.app_name }}" \
+            --url "${{ github.event.client_payload.app_url }}" \
+            --icon icon.png \
+            --output app.apk
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
