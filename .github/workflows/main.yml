@@ -1,4 +1,4 @@
-name: Web to APK (Cordova) – آسان اور یقینی
+name: Web to APK (Cordova) – ڈیبگ کے ساتھ
 
 on:
   repository_dispatch:
@@ -35,6 +35,73 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova project
+        run: |
+          cordova create MyApp com.example.app "${{ github.event.client_payload.app_name }}"
+          cd MyApp
+          cordova platform add android
+
+      - name: Add icon to project
+        run: |
+          cp icon.png MyApp/www/icon.png
+          cd MyApp
+          # config.xml میں آئیکن شامل کریں
+          sed -i '/<\/widget>/i \ \ <platform name="android">\n    <icon src="www\/icon.png" density="hdpi" \/>\n  <\/platform>' config.xml
+
+      - name: Set up index.html to load website
+        run: |
+          cat > MyApp/www/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="Content-Security-Policy" content="default-src *; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'; img-src * data: 'unsafe-inline'; connect-src * 'unsafe-inline'; frame-src *;">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body>
+            <script>
+              window.location.href = "${{ github.event.client_payload.app_url }}";
+            </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Build APK with Cordova
+        run: |
+          cd MyApp
+          cordova build android --release || cordova build android --debug
+          # اگر ریلیز فیل ہو تو ڈیبگ بھی آزمائیں
+
+      - name: Debug - List all output files
+        run: |
+          echo "=== Searching for APK files ==="
+          find MyApp -name "*.apk" -type f || echo "No APK found"
+          echo "=== Full directory tree ==="
+          ls -R MyApp/platforms/android/app/build/outputs/ || echo "No outputs directory"
+
+      - name: Find and copy APK (any)
+        run: |
+          APK_PATH=$(find MyApp -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ No APK found anywhere!"
+            exit 1
+          fi
+          echo "✅ Found APK at: $APK_PATH"
+          cp "$APK_PATH" app.apk
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: "APK Build #${{ github.run_id }}"
+          body: "✅ App: ${{ github.event.client_payload.app_name }}"
+          files: app.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Cordova
         run: npm install -g cordova
 
