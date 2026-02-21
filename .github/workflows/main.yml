@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap on default runner) – حتمی
+name: Web to APK (PWABuilder API) – یقینی کام
 
 on:
   repository_dispatch:
@@ -11,15 +11,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install ImageMagick (icon conversion)
         run: |
           sudo apt-get update
@@ -29,48 +20,41 @@ jobs:
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
+          # دوبارہ base64 میں تبدیل کریں (API کے لیے)
+          base64 -w0 icon.png > icon_base64.txt
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
-      - name: Accept Android SDK licenses
+      - name: Generate safe package ID
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          # خالی جگہیں ہٹائیں اور چھوٹے حروف میں کریں
+          SAFE_NAME=$(echo "${{ github.event.client_payload.app_name }}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+          echo "PACKAGE_ID=com.example.$SAFE_NAME" >> $GITHUB_ENV
 
-      - name: Create manifest.json
+      - name: Call PWABuilder API
         run: |
-          cat > manifest.json << EOF
+          # JSON پے لوڈ تیار کریں
+          cat > payload.json << EOF
           {
             "name": "${{ github.event.client_payload.app_name }}",
-            "short_name": "${{ github.event.client_payload.app_name }}",
-            "start_url": "${{ github.event.client_payload.app_url }}",
+            "startUrl": "${{ github.event.client_payload.app_url }}",
+            "icon": "$(cat icon_base64.txt)",
+            "packageId": "${{ env.PACKAGE_ID }}",
             "display": "standalone",
-            "background_color": "#ffffff",
-            "theme_color": "#000000",
-            "icons": [
-              {
-                "src": "icon.png",
-                "sizes": "512x512",
-                "type": "image/png"
-              }
-            ]
+            "themeColor": "#000000",
+            "backgroundColor": "#ffffff"
           }
           EOF
 
-      - name: Build APK with Bubblewrap (with all paths)
-        run: |
-          # JAVA_HOME خودکار طور پر setup-java سے سیٹ ہو جاتا ہے
-          echo "JAVA_HOME = $JAVA_HOME"
-          echo "ANDROID_HOME = $ANDROID_HOME"
-          bubblewrap init --manifest manifest.json --directory app --jdk "$JAVA_HOME" --androidSdk "$ANDROID_HOME"
-          cd app
-          bubblewrap build --verbose
-          cp app-release-signed.apk ../app.apk
+          # API کو درخواست بھیجیں اور جواب کو app.zip میں محفوظ کریں
+          curl -X POST https://pwabuilder.com/api/createAppPackage \
+            -H "Content-Type: application/json" \
+            --data @payload.json \
+            --output app.zip
+
+          # ZIP سے APK نکالیں
+          unzip -p app.zip > app.apk || {
+            echo "APK نکالنے میں ناکامی"
+            exit 1
+          }
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
