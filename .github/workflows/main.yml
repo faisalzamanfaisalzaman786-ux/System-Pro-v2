@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap on default runner)
+name: Web to APK (Bubblewrap on default runner) – حتمی
 
 on:
   repository_dispatch:
@@ -62,9 +62,12 @@ jobs:
           }
           EOF
 
-      - name: Build APK with Bubblewrap
+      - name: Build APK with Bubblewrap (with all paths)
         run: |
-          bubblewrap init --manifest manifest.json --directory app --noJdk
+          # JAVA_HOME خودکار طور پر setup-java سے سیٹ ہو جاتا ہے
+          echo "JAVA_HOME = $JAVA_HOME"
+          echo "ANDROID_HOME = $ANDROID_HOME"
+          bubblewrap init --manifest manifest.json --directory app --jdk "$JAVA_HOME" --androidSdk "$ANDROID_HOME"
           cd app
           bubblewrap build --verbose
           cp app-release-signed.apk ../app.apk
