@@ -11,10 +11,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Decode and prepare logo (ultra debug)
+      - name: Decode and prepare logo (with fallback)
         run: |
           set -x
           echo "Base64 length: ${#LOGO_BASE64}"
+          
+          if [ -z "$LOGO_BASE64" ]; then
+            echo "⚠️ Logo base64 is empty, using default icon from template"
+            # Default icon already exists in android-template, just copy it to all densities
+            mkdir -p android-template/app/src/main/res/mipmap-mdpi
+            mkdir -p android-template/app/src/main/res/mipmap-hdpi
+            mkdir -p android-template/app/src/main/res/mipmap-xhdpi
+            mkdir -p android-template/app/src/main/res/mipmap-xxhdpi
+            mkdir -p android-template/app/src/main/res/mipmap-xxxhdpi
+            cp android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png android-template/app/src/main/res/mipmap-mdpi/ic_launcher.png 2>/dev/null || true
+            cp android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null || true
+            cp android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png android-template/app/src/main/res/mipmap-xhdpi/ic_launcher.png 2>/dev/null || true
+            cp android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png android-template/app/src/main/res/mipmap-xxhdpi/ic_launcher.png 2>/dev/null || true
+            cp android-template/app/src/main/res/mipmap-hdpi/ic_launcher.png android-template/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png 2>/dev/null || true
+            echo "✅ Default icons used"
+            exit 0
+          fi
+          
           echo "First 100 chars: ${LOGO_BASE64:0:100}"
           
           # Base64 decode
@@ -23,14 +41,10 @@ jobs:
           # Check file size
           echo "File size: $(wc -c < original_logo.png) bytes"
           
-          # Show first 20 bytes in hex (to see header)
-          hexdump -C original_logo.png | head -n 2
-          
-          # Check file type with 'file' command
-          file original_logo.png
-          
-          # Try to identify with ImageMagick
+          # Install ImageMagick
           sudo apt-get update && sudo apt-get install -y imagemagick
+          
+          # Validate image
           identify original_logo.png || { echo "❌ Not a valid image"; exit 1; }
           
           # Create target directories
