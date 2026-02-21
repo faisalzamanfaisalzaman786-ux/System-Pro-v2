@@ -1,4 +1,4 @@
-name: Web to APK (PWABuilder – صحیح طریقہ)
+name: Web to APK (Bubblewrap + JDK 17) – حتمی حل
 
 on:
   repository_dispatch:
@@ -7,41 +7,78 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: thyrlian/android-sdk:latest
+      options: --user root
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install ImageMagick (آئیکن کو PNG میں تبدیل کرنے کے لیے)
+      - name: Install ImageMagick (icon conversion)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
+          apt-get update
+          apt-get install -y imagemagick
+
+      - name: Install Node.js and npm
+        run: |
+          apt-get update
+          apt-get install -y curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+
+      - name: Install JDK 17 (Bubblewrap requires 17)
+        run: |
+          apt-get update
+          apt-get install -y openjdk-17-jdk
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          echo "PATH=$JAVA_HOME/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Verify Java version
+        run: java -version
 
       - name: Decode and convert icon to PNG
         run: |
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install PWABuilder CLI
-        run: npm install -g @pwabuilder/cli
-
-      - name: Generate manifest.json from URL
+      - name: Accept Android SDK licenses
         run: |
-          pwa generate \
-            --name "${{ github.event.client_payload.app_name }}" \
-            --url "${{ github.event.client_payload.app_url }}" \
-            --icon icon.png \
-            --output manifest.json
+          SDKMANAGER_PATH=$(find /opt/android-sdk /usr/local/android-sdk -name sdkmanager -type f 2>/dev/null | head -n1)
+          if [ -z "$SDKMANAGER_PATH" ]; then
+            SDKMANAGER_PATH="/opt/android-sdk/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes | $SDKMANAGER_PATH --licenses
 
-      - name: Package APK using manifest
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
+
+      - name: Create manifest.json
         run: |
-          pwa package apk \
-            --manifest manifest.json \
-            --output app.apk
+          cat > manifest.json << EOF
+          {
+            "name": "${{ github.event.client_payload.app_name }}",
+            "short_name": "${{ github.event.client_payload.app_name }}",
+            "start_url": "${{ github.event.client_payload.app_url }}",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#000000",
+            "icons": [
+              {
+                "src": "icon.png",
+                "sizes": "512x512",
+                "type": "image/png"
+              }
+            ]
+          }
+          EOF
+
+      - name: Build APK with Bubblewrap (JDK 17)
+        run: |
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          bubblewrap init --manifest manifest.json --directory app --jdk "$JAVA_HOME"
+          cd app
+          bubblewrap build --verbose
+          cp app-release-signed.apk ../app.apk
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
