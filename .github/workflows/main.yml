@@ -1,4 +1,4 @@
-name: Web to APK (Bubblewrap + Root + Licenses)
+name: Web to APK (Bubblewrap + Root + Fixed SDK)
 
 on:
   repository_dispatch:
@@ -31,9 +31,16 @@ jobs:
           echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
           convert icon_raw -resize 512x512! icon.png
 
-      - name: Accept Android SDK licenses
+      - name: Locate sdkmanager and accept licenses
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          # تلاش کریں sdkmanager کہاں ہے
+          SDKMANAGER_PATH=$(find /opt/android-sdk /usr/local/android-sdk -name sdkmanager -type f 2>/dev/null | head -n1)
+          if [ -z "$SDKMANAGER_PATH" ]; then
+            echo "sdkmanager not found, using default path"
+            SDKMANAGER_PATH="/opt/android-sdk/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "Using sdkmanager at: $SDKMANAGER_PATH"
+          yes | $SDKMANAGER_PATH --licenses
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
